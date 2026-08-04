@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Time & Travel Tracker</title>
+  <style>
+    :root {
+      --bg: #f4f4f7;
+      --card: #ffffff;
+      --primary: #007aff;
+      --danger: #ff3b30;
+      --success: #34c759;
+      --text: #1c1c1e;
+      --border: #e5e5ea;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 450px;
+    }
+
+    h1 {
+      font-size: 24px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .card h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    button {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      cursor: pointer;
+    }
+
+    .btn-start { background-color: var(--success); }
+    .btn-stop { background-color: var(--danger); }
+    .btn-export { background-color: var(--primary); width: 100%; margin-top: 10px; }
+    .btn-add { background-color: #5856d6; width: 100%; margin-top: 10px; }
+
+    .timer-display {
+      font-size: 14px;
+      color: #666;
+      margin-top: 8px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 8px;
+      color: #555;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    .log-item {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .log-item:last-child { border-bottom: none; }
+
+    .log-details { font-size: 14px; }
+    .log-type { font-weight: bold; }
+    .log-time { color: #666; font-size: 12px; }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 18px;
+      font-weight: bold;
+      width: auto;
+      padding: 4px 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Time & Travel Tracker</h1>
+
+  <!-- Active Timers -->
+  <div class="card">
+    <h2>Quick Timers</h2>
+    
+    <div>
+      <strong>Travel</strong>
+      <div class="btn-group">
+        <button class="btn-start" onclick="startTimer('Travel')">Start Travel</button>
+        <button class="btn-stop" onclick="stopTimer('Travel')">Stop Travel</button>
+      </div>
+      <div id="travel-status" class="timer-display">Status: Not running</div>
+    </div>
+
+    <hr style="margin: 16px 0; border: 0; border-top: 1px solid var(--border);">
+
+    <div>
+      <strong>Work</strong>
+      <div class="btn-group">
+        <button class="btn-start" onclick="startTimer('Work')">Start Work</button>
+        <button class="btn-stop" onclick="stopTimer('Work')">Stop Work</button>
+      </div>
+      <div id="work-status" class="timer-display">Status: Not running</div>
+    </div>
+  </div>
+
+  <!-- Manual Entry / Editing -->
+  <div class="card">
+    <h2>Manual Entry</h2>
+    <label>Type</label>
+    <select id="manual-type">
+      <option value="Work">Work</option>
+      <option value="Travel">Travel</option>
+    </select>
+
+    <label>Start Time</label>
+    <input type="datetime-local" id="manual-start">
+
+    <label>End Time</label>
+    <input type="datetime-local" id="manual-end">
+
+    <label>Notes / Description</label>
+    <input type="text" id="manual-notes" placeholder="e.g. Drive to site A / Client meeting">
+
+    <button class="btn-add" onclick="addManualEntry()">Add Entry</button>
+  </div>
+
+  <!-- Logs & Export -->
+  <div class="card">
+    <h2>Logs</h2>
+    <div id="log-list">No entries yet.</div>
+    <button class="btn-export" onclick="exportToCSV()">Export to Excel (CSV)</button>
+    <button style="background-color: #8e8e93; width: 100%; margin-top: 8px;" onclick="clearLogs()">Clear All Logs</button>
+  </div>
+</div>
+
+<script>
+  let activeTimers = JSON.parse(localStorage.getItem('activeTimers')) || {};
+  let logs = JSON.parse(localStorage.getItem('timeLogs')) || [];
+
+  function updateStatusDisplays() {
+    ['Travel', 'Work'].forEach(type => {
+      const statusEl = document.getElementById(type.toLowerCase() + '-status');
+      if (activeTimers[type]) {
+        const startTime = new Date(activeTimers[type]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        statusEl.innerText = `Running since: ${startTime}`;
+        statusEl.style.color = '#34c759';
+      } else {
+        statusEl.innerText = 'Status: Not running';
+        statusEl.style.color = '#666';
+      }
+    });
+  }
+
+  function startTimer(type) {
+    if (activeTimers[type]) {
+      alert(`${type} timer is already running.`);
+      return;
+    }
+    activeTimers[type] = new Date().toISOString();
+    localStorage.setItem('activeTimers', JSON.stringify(activeTimers));
+    updateStatusDisplays();
+  }
+
+  function stopTimer(type) {
+    if (!activeTimers[type]) {
+      alert(`${type} timer is not running.`);
+      return;
+    }
+    const startTime = new Date(activeTimers[type]);
+    const endTime = new Date();
+    
+    saveLog(type, startTime, endTime, 'Logged via timer');
+    
+    delete activeTimers[type];
+    localStorage.setItem('activeTimers', JSON.stringify(activeTimers));
+    updateStatusDisplays();
+    renderLogs();
+  }
+
+  function addManualEntry() {
+    const type = document.getElementById('manual-type').value;
+    const startVal = document.getElementById('manual-start').value;
+    const endVal = document.getElementById('manual-end').value;
+    const notes = document.getElementById('manual-notes').value || 'Manual Entry';
+
+    if (!startVal || !endVal) {
+      alert('Please select both a start and end time.');
+      return;
+    }
+
+    const startTime = new Date(startVal);
+    const endTime = new Date(endVal);
+
+    if (endTime <= startTime) {
+      alert('End time must be after start time.');
+      return;
+    }
+
+    saveLog(type, startTime, endTime, notes);
+    renderLogs();
+
+    // Clear inputs
+    document.getElementById('manual-start').value = '';
+    document.getElementById('manual-end').value = '';
+    document.getElementById('manual-notes').value = '';
+  }
+
+  function saveLog(type, start, end, notes) {
+    const durationHours = ((end - start) / (1000 * 60 * 60)).toFixed(2);
+    const log = {
+      id: Date.now(),
+      date: start.toISOString().split('T')[0],
+      type: type,
+      start: start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+      end: end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+      duration: durationHours,
+      notes: notes
+    };
+    logs.unshift(log);
+    localStorage.setItem('timeLogs', JSON.stringify(logs));
+  }
+
+  function deleteLog(id) {
+    logs = logs.filter(item => item.id !== id);
+    localStorage.setItem('timeLogs', JSON.stringify(logs));
+    renderLogs();
+  }
+
+  function clearLogs() {
+    if (confirm('Are you sure you want to clear all logged entries?')) {
+      logs = [];
+      localStorage.removeItem('timeLogs');
+      renderLogs();
+    }
+  }
+
+  function renderLogs() {
+    const container = document.getElementById('log-list');
+    if (logs.length === 0) {
+      container.innerHTML = '<p style="color: #8e8e93; text-align: center;">No entries logged yet.</p>';
+      return;
+    }
+
+    container.innerHTML = logs.map(log => `
+      <div class="log-item">
+        <div class="log-details">
+          <span class="log-type">[${log.type}]</span> ${log.date}<br>
+          <span class="log-time">${log.start} - ${log.end} (${log.duration} hrs)</span><br>
+          <small style="color: #666;">${log.notes}</small>
+        </div>
+        <button class="delete-btn" onclick="deleteLog(${log.id})">&times;</button>
+      </div>
+    `).join('');
+  }
+
+  function exportToCSV() {
+    if (logs.length === 0) {
+      alert('No data to export.');
+      return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8,Date,Type,Start Time,End Time,Hours,Notes\n";
+
+    logs.forEach(row => {
+      csvContent += `${row.date},${row.type},${row.start},${row.end},${row.duration},"${row.notes}"\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Timesheet_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  // Initial load
+  updateStatusDisplays();
+  renderLogs();
+</script>
+</body>
+</html>
